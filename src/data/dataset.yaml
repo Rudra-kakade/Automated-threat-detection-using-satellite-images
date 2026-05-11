@@ -1,0 +1,31 @@
+# dataset.yaml — Satellite OBB Detection
+# YOLOv8s-obb dataset configuration
+# Blueprint v2, Section 3
+
+path: ./data/satellite_obb
+train: images/train
+val: images/val
+test: images/test
+
+nc: 18
+
+names: 
+  0: airport
+  1: baseball-diamond
+  2: basketball-court
+  3: bridge
+  4: container-crane
+  5: ground-track-field
+  6: harbor
+  7: helicopter
+  8: helipad
+  9: large-vehicle
+  10: plane
+  11: roundabout
+  12: ship
+  13: small-vehicle
+  14: soccer-ball-field
+  15: storage-tank
+  16: swimming-pool
+  17: tennis-court
+
