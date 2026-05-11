@@ -1,0 +1,38 @@
+# Environments
+venv/
+.venv/
+env/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Project Specific (Root Only)
+/data/
+/runs/
+/eval_results/
+/exports/
+*.pt
+*.engine
+*.onnx
+
+# Media & Large Files
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.json
+*.csv
+!src/**/*.yaml
+!src/**/*.json
+!requirements.txt
+!*.md
+
+# IDEs
+.vscode/
+.idea/
+.claude/
+.agent/
