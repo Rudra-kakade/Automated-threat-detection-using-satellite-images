@@ -1,38 +1,52 @@
-# Environments
-venv/
-.venv/
-env/
-.env
-
-# Python
+# ─── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
 
-# Project Specific (Root Only)
-/data/
-/runs/
-/eval_results/
-/exports/
-*.pt
-*.engine
-*.onnx
+# ─── Virtual Environments ────────────────────────────────────────────────────
+venv/
+.venv/
+env/
 
-# Media & Large Files
-*.png
-*.jpg
-*.jpeg
-*.webp
-*.json
-*.csv
-!src/**/*.yaml
-!src/**/*.json
-!requirements.txt
-!*.md
-
-# IDEs
+# ─── IDE ─────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
-.claude/
-.agent/
+*.swp
+*.swo
+*~
+
+# ─── ML Artifacts (tracked by DVC, not Git) ──────────────────────────────────
+*.pt
+*.onnx
+*.engine
+*.trt
+runs/
+eval_results/
+inference_results/
+vis_output/
+exports/
+
+# ─── Data (tracked by DVC) ───────────────────────────────────────────────────
+data/satellite_obb/images/
+data/satellite_obb/labels/
+data/raw/
+data/test_images/
+
+# ─── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Misc ────────────────────────────────────────────────────────────────────
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+pipeline_report.md
+*_display.png
+*_detections.json
