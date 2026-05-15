@@ -1,0 +1,75 @@
+schema: '2.0'
+stages:
+  ingest:
+    cmd: python pipeline.py --stage ingest --config pipeline_config.yaml
+    deps:
+    - path: pipeline_config.yaml
+      hash: md5
+      md5: 48dfb2a096561457254f7b11e92b0d04
+      size: 3573
+    - path: src/data/tile_prep.py
+      hash: md5
+      md5: 32868c0ea87efd9914690b358e06bb33
+      size: 10706
+    params:
+      pipeline_config.yaml:
+        data.output_dir: ./data/satellite_obb
+        data.overlap: 128
+        data.source_dir: ./data/raw
+        data.tile_size: 512
+    outs:
+    - path: data/satellite_obb/images/test
+      hash: md5
+      md5: ec60e8f428a064857f4cbb25b5db392d.dir
+      size: 116268122
+      nfiles: 182
+    - path: data/satellite_obb/images/train
+      hash: md5
+      md5: 71af75b5a56d3aeb151e8fea771e24ee.dir
+      size: 856386608
+      nfiles: 1094
+    - path: data/satellite_obb/images/val
+      hash: md5
+      md5: 76a309dffdb0b12746e33b934f24a03a.dir
+      size: 444170508
+      nfiles: 546
+    - path: data/satellite_obb/labels/test
+      hash: md5
+      md5: a4ff4e17635311f6db242c3c2a6ac38e.dir
+      size: 4616249
+      nfiles: 182
+    - path: data/satellite_obb/labels/train
+      hash: md5
+      md5: 4cad44bbcb7812d93b94235a0ae8a8e9.dir
+      size: 22185886
+      nfiles: 1094
+    - path: data/satellite_obb/labels/val
+      hash: md5
+      md5: 0b6670a9ef2c96a4652747e78e14a1bc.dir
+      size: 12878570
+      nfiles: 546
+  augment:
+    cmd: python pipeline.py --stage augment --config pipeline_config.yaml
+    deps:
+    - path: data/satellite_obb/images/train
+      hash: md5
+      md5: 71af75b5a56d3aeb151e8fea771e24ee.dir
+      size: 856386608
+      nfiles: 1094
+    - path: data/satellite_obb/labels/train
+      hash: md5
+      md5: 4cad44bbcb7812d93b94235a0ae8a8e9.dir
+      size: 22185886
+      nfiles: 1094
+    - path: pipeline_config.yaml
+      hash: md5
+      md5: 48dfb2a096561457254f7b11e92b0d04
+      size: 3573
+    - path: src/data/augmentation.py
+      hash: md5
+      md5: 23baaeacef7cda02986c585b578ea118
+      size: 9763
+    params:
+      pipeline_config.yaml:
+        augmentation.enabled: true
+        augmentation.num_copies: 3

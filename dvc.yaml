@@ -1,0 +1,124 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# DVC Pipeline — Satellite Defence
+# ═══════════════════════════════════════════════════════════════════════════════
+# Defines the ML pipeline stages for data versioning and reproducibility.
+# Run: dvc repro        (execute full pipeline)
+# Run: dvc repro train  (execute up to and including train stage)
+
+stages:
+  ingest:
+    cmd: python pipeline.py --stage ingest --config pipeline_config.yaml
+    deps:
+      - src/data/tile_prep.py
+      - pipeline_config.yaml
+    params:
+      - pipeline_config.yaml:
+          - data.source_dir
+          - data.output_dir
+          - data.tile_size
+          - data.overlap
+    outs:
+      - data/satellite_obb/images/train:
+          cache: true
+          persist: true
+      - data/satellite_obb/images/val:
+          cache: true
+          persist: true
+      - data/satellite_obb/images/test:
+          cache: true
+          persist: true
+      - data/satellite_obb/labels/train:
+          cache: true
+          persist: true
+      - data/satellite_obb/labels/val:
+          cache: true
+          persist: true
+      - data/satellite_obb/labels/test:
+          cache: true
+          persist: true
+
+  augment:
+    cmd: python pipeline.py --stage augment --config pipeline_config.yaml
+    deps:
+      - src/data/augmentation.py
+      - data/satellite_obb/images/train
+      - data/satellite_obb/labels/train
+      - pipeline_config.yaml
+    params:
+      - pipeline_config.yaml:
+          - augmentation.enabled
+          - augmentation.num_copies
+
+  train:
+    cmd: python pipeline.py --stage train --config pipeline_config.yaml
+    deps:
+      - src/train/train.py
+      - src/data/dataset.yaml
+      - data/satellite_obb/images/train
+      - data/satellite_obb/labels/train
+      - data/satellite_obb/images/val
+      - data/satellite_obb/labels/val
+      - pipeline_config.yaml
+    params:
+      - pipeline_config.yaml:
+          - training.weights
+          - training.epochs
+          - training.batch
+          - training.imgsz
+          - training.lr0
+    outs:
+      - runs/yolov8s_obb_pipeline/weights/best.pt:
+          cache: true
+          persist: true
+    plots:
+      - runs/yolov8s_obb_pipeline/results.csv:
+          cache: false
+          persist: true
+
+  evaluate:
+    cmd: python pipeline.py --stage evaluate --config pipeline_config.yaml
+    deps:
+      - src/eval/evaluate.py
+      - src/eval/confusion_matrix.py
+      - src/eval/pr_curves.py
+      - runs/yolov8s_obb_pipeline/weights/best.pt
+      - src/data/dataset.yaml
+      - pipeline_config.yaml
+    params:
+      - pipeline_config.yaml:
+          - evaluation.conf
+          - evaluation.iou
+          - quality_gate
+    metrics:
+      - eval_results/metrics.json:
+          cache: false
+    plots:
+      - eval_results/confusion_matrix.png:
+          cache: false
+      - eval_results/pr_curves.png:
+          cache: false
+
+  visualize:
+    cmd: python pipeline.py --stage visualize --config pipeline_config.yaml
+    deps:
+      - src/eval/dashboard.py
+      - src/eval/visualise.py
+      - runs/yolov8s_obb_pipeline/weights/best.pt
+      - pipeline_config.yaml
+    plots:
+      - eval_results/plots/training_dashboard.png:
+          cache: false
+
+  export:
+    cmd: python pipeline.py --stage export --config pipeline_config.yaml
+    deps:
+      - runs/yolov8s_obb_pipeline/weights/best.pt
+      - pipeline_config.yaml
+    params:
+      - pipeline_config.yaml:
+          - export.format
+          - export.imgsz
+    outs:
+      - exports/best.onnx:
+          cache: true
+          persist: true
