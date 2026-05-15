@@ -1,0 +1,76 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Pipeline Configuration — Satellite Defence
+# ═══════════════════════════════════════════════════════════════════════════════
+# Central config for all pipeline stages. Override via CLI or env vars.
+
+# ─── Data Ingestion ──────────────────────────────────────────────────────────
+data:
+  source_dir: ./data/raw                 # Raw satellite images + DOTA annotations
+  output_dir: ./data/satellite_obb       # Tiled output directory
+  dataset_yaml: ./src/data/dataset.yaml  # YOLO dataset config
+  splits:
+    - train
+    - val
+    - test
+  tile_size: 512
+  overlap: 128
+
+# ─── Augmentation ────────────────────────────────────────────────────────────
+augmentation:
+  enabled: true
+  num_copies: 3          # Augmented copies per original tile
+  split: train           # Only augment training split
+
+# ─── Training ────────────────────────────────────────────────────────────────
+training:
+  weights: yolov8s-obb.pt
+  epochs: 75
+  batch: 6
+  accumulate: 3          # Effective gradient batch = 18
+  imgsz: 512
+  device: 0              # GPU device index (or "cpu")
+  project: runs
+  name: yolov8s_obb_pipeline
+  resume: false
+  lr0: 0.001
+  cos_lr: true
+  warmup_epochs: 5
+  close_mosaic: 20
+  save_period: 10
+
+# ─── Evaluation ──────────────────────────────────────────────────────────────
+evaluation:
+  conf: 0.25
+  iou: 0.5
+  batch: 8
+  imgsz: 512
+  output_dir: ./eval_results
+
+# ─── Quality Gate ────────────────────────────────────────────────────────────
+quality_gate:
+  enabled: true
+  map50_min: 0.50
+  fpr_max: 0.15
+  recall_ship_min: 0.75
+  recall_aircraft_min: 0.70
+
+# ─── Inference ───────────────────────────────────────────────────────────────
+inference:
+  test_images_dir: ./data/test_images
+  output_dir: ./inference_results
+  confidence: 0.25
+  slice_size: 512
+  overlap_ratio: 0.25
+
+# ─── Visualization ───────────────────────────────────────────────────────────
+visualization:
+  output_dir: ./eval_results/plots
+  max_overlay_images: 20
+  conf_threshold: 0.3
+
+# ─── Export ───────────────────────────────────────────────────────────────────
+export:
+  format: onnx
+  output_dir: ./exports
+  imgsz: 512
+  simplify: true
