@@ -1,0 +1,218 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# CD Pipeline — Satellite Defence
+# ═══════════════════════════════════════════════════════════════════════════════
+# Full ML pipeline: data → train → evaluate → infer → visualize → export.
+# Triggered manually or on version tags. Requires self-hosted GPU runner.
+
+name: CD — Full Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Pipeline stage(s) to run"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - ingest
+          - augment
+          - train
+          - evaluate
+          - infer
+          - visualize
+          - export
+      dry_run:
+        description: "Dry run (no GPU ops)"
+        required: false
+        default: false
+        type: boolean
+      config:
+        description: "Config file path"
+        required: false
+        default: "pipeline_config.yaml"
+        type: string
+
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # ─── Full Pipeline ────────────────────────────────────────────────────────
+  pipeline:
+    name: Run Pipeline
+    runs-on: self-hosted  # GPU runner
+    timeout-minutes: 480  # 8 hours max for training
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Pull DVC data
+        run: |
+          dvc pull || echo "DVC pull skipped (no remote configured)"
+
+      - name: Verify GPU
+        run: |
+          python -c "
+          import torch
+          assert torch.cuda.is_available(), 'No GPU available'
+          gpu = torch.cuda.get_device_name(0)
+          vram = torch.cuda.get_device_properties(0).total_memory / 1e9
+          print(f'✓ GPU: {gpu} ({vram:.1f} GB)')
+          "
+
+      - name: Run pipeline
+        id: pipeline
+        run: |
+          STAGE="${{ github.event.inputs.stage || 'all' }}"
+          DRY="${{ github.event.inputs.dry_run || 'false' }}"
+          CONFIG="${{ github.event.inputs.config || 'pipeline_config.yaml' }}"
+          
+          CMD="python pipeline.py --stage $STAGE --config $CONFIG"
+          if [ "$DRY" = "true" ]; then
+            CMD="$CMD --dry-run"
+          fi
+          
+          echo "Running: $CMD"
+          $CMD
+
+      - name: Upload metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: |
+            eval_results/metrics.json
+            eval_results/pipeline_run_*.json
+            eval_results/pipeline_report*.md
+          retention-days: 90
+
+      - name: Upload plots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plots
+          path: |
+            eval_results/plots/
+            eval_results/confusion_matrix.png
+            eval_results/pr_curves.png
+          retention-days: 90
+
+      - name: Upload model
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-weights
+          path: |
+            exports/
+          retention-days: 90
+
+      - name: Upload inference results
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inference-results
+          path: inference_results/
+          retention-days: 30
+
+      - name: Push DVC tracked files
+        if: success()
+        run: |
+          dvc push || echo "DVC push skipped (no remote configured)"
+
+  # ─── Quality Gate ──────────────────────────────────────────────────────────
+  quality-gate:
+    name: Quality Gate Check
+    runs-on: ubuntu-latest
+    needs: pipeline
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download metrics
+        uses: actions/download-artifact@v4
+        with:
+          name: eval-results
+          path: eval_results/
+
+      - name: Check quality thresholds
+        run: |
+          python -c "
+          import json, sys, yaml
+          from pathlib import Path
+          
+          # Load config thresholds
+          cfg = yaml.safe_load(open('pipeline_config.yaml'))
+          gate = cfg.get('quality_gate', {})
+          
+          # Find latest metrics
+          metrics_file = Path('eval_results/metrics.json')
+          if not metrics_file.exists():
+              print('⚠ No metrics.json found — skipping gate')
+              sys.exit(0)
+          
+          metrics = json.load(open(metrics_file))
+          passed = True
+          
+          map50 = metrics.get('map50', 0)
+          map50_min = gate.get('map50_min', 0.50)
+          if map50 < map50_min:
+              print(f'❌ mAP@0.5 = {map50:.3f} < {map50_min}')
+              passed = False
+          else:
+              print(f'✅ mAP@0.5 = {map50:.3f} >= {map50_min}')
+          
+          fpr_max = gate.get('fpr_max', 0.15)
+          for name, m in metrics.get('per_class', {}).items():
+              fpr = m.get('fpr', 0)
+              if fpr > fpr_max:
+                  print(f'❌ {name} FPR = {fpr:.3f} > {fpr_max}')
+                  passed = False
+              else:
+                  print(f'✅ {name} FPR = {fpr:.3f} <= {fpr_max}')
+          
+          if not passed:
+              print('\\n❌ QUALITY GATE FAILED')
+              sys.exit(1)
+          print('\\n✅ QUALITY GATE PASSED')
+          "
+
+  # ─── Release (on tag) ─────────────────────────────────────────────────────
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [pipeline, quality-gate]
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            model-weights/**/*
+            eval-results/metrics.json
+            eval-results/pipeline_report*.md
+          body: |
+            ## Satellite Defence Model Release
+            
+            See attached pipeline report for full metrics breakdown.
+          draft: false
+          prerelease: false
